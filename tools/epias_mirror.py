@@ -39,6 +39,26 @@ BASE_URL = "https://seffaflik.epias.com.tr"
 MCP_PATH = "/electricity-service/v1/markets/dam/data/mcp"            # PTF, saatlik
 YEKDEM_UNIT_COST_PATH = "/electricity-service/v1/renewables/data/unit-cost"  # YEKDEM birim maliyet
 
+# GÖP EŞLEŞME MİKTARI — günlük PTF'nin AĞIRLIĞI budur.
+#
+# Mevzuat "EPİAŞ tarafından Türkiye için günlük açıklanan AĞIRLIKLI ORTALAMA piyasa takas
+# fiyatları" der (1 Nolu Açıklama md. 12). Saatlik PTF'lerin düz ortalaması ağırlıklı
+# ortalama DEĞİLDİR: gecenin ucuz ve az işlem gören saati ile akşam puantının pahalı ve
+# yoğun saati aynı ağırlığa sahip olamaz. Doğru ağırlık, o saatte gün öncesi piyasasında
+# eşleşen miktardır:
+#
+#     PTF_gün = Σ(PTF_saat × Eşleşme_saat) / Σ(Eşleşme_saat)
+#
+# Uç adı sürümle değişebildiği için birkaç aday sırayla denenir; hiçbiri tutmazsa düz
+# ortalamaya düşülür ve bu durum üretilen dosyanın not alanına YAZILIR — sessizce yanlış
+# yöntem kullanılmasın.
+MATCHING_QUANTITY_PATHS = (
+    "/electricity-service/v1/markets/dam/data/matching-quantity",
+    "/electricity-service/v1/markets/dam/data/dam-volume",
+    "/electricity-service/v1/markets/dam/data/day-ahead-market-trade-volume",
+    "/electricity-service/v1/markets/dam/data/trade-volume",
+)
+
 TIMEZONE_SUFFIX = "+03:00"
 
 # EPİAŞ yanıtlarındaki alan adları sürümle değişebiliyor. Tek yerden, sırayla deneniyor:
@@ -46,6 +66,9 @@ TIMEZONE_SUFFIX = "+03:00"
 LIST_FIELD_CANDIDATES = ("items", "body", "content", "data")
 DATE_FIELD_CANDIDATES = ("date", "effectiveDate", "period", "time", "dateTime")
 PRICE_FIELD_CANDIDATES = ("price", "mcp", "priceTl", "unitCost", "cost", "amount", "value")
+QUANTITY_FIELD_CANDIDATES = (
+    "matchingQuantity", "quantity", "volume", "tradeVolume", "amount", "value",
+)
 
 
 class EpiasError(RuntimeError):
@@ -135,25 +158,72 @@ def to_day(value) -> str | None:
     return value[:10]
 
 
-def daily_average(rows: list[dict]) -> dict[str, Decimal]:
-    """
-    Saatlik PTF'yi güne indirger (basit ortalama).
+def to_hour_key(value) -> str | None:
+    """'2026-08-01T14:00:00+03:00' → '2026-08-01T14' (saatlik eşleştirme anahtarı)."""
+    if not isinstance(value, str) or len(value) < 13:
+        return None
+    return value[:13]
 
-    NOT: En doğrusu tüketim ağırlıklı ortalamadır; ama evde saatlik tüketim verisi yok.
-    Basit ortalama, günlük endeksli sözleşmeler için kabul edilebilir bir yaklaşımdır ve
-    uygulamada "günlük ortalama PTF" olarak açıkça etiketlenir.
-    """
-    buckets: dict[str, list[Decimal]] = {}
+
+def hourly_quantities(rows: list[dict]) -> dict[str, Decimal]:
+    """Saat anahtarı → o saatte eşleşen miktar."""
+    sonuc: dict[str, Decimal] = {}
     for row in rows:
-        day = to_day(pick(row, DATE_FIELD_CANDIDATES))
-        price = pick(row, PRICE_FIELD_CANDIDATES)
-        if day is None or price is None:
+        saat = to_hour_key(pick(row, DATE_FIELD_CANDIDATES))
+        miktar = pick(row, QUANTITY_FIELD_CANDIDATES)
+        if saat is None or miktar is None:
             continue
-        buckets.setdefault(day, []).append(Decimal(str(price)))
-    return {
-        day: (sum(values) / Decimal(len(values))) if values else Decimal(0)
-        for day, values in buckets.items()
-    }
+        try:
+            sonuc[saat] = Decimal(str(miktar))
+        except Exception:  # noqa: BLE001 - bozuk satırı atla
+            continue
+    return sonuc
+
+
+def daily_weighted_average(
+    rows: list[dict], quantities: dict[str, Decimal]
+) -> tuple[dict[str, Decimal], bool]:
+    """
+    Saatlik PTF'yi güne indirger.
+
+    Eşleşme miktarı verisi varsa AĞIRLIKLI ortalama (mevzuatın istediği), yoksa düz
+    ortalama alınır. İkinci dönüş değeri hangisinin kullanıldığını söyler; çağıran bunu
+    üretilen dosyaya not olarak yazar.
+    """
+    agirlikli = bool(quantities)
+    paylar: dict[str, Decimal] = {}
+    paydalar: dict[str, Decimal] = {}
+
+    for row in rows:
+        ham_tarih = pick(row, DATE_FIELD_CANDIDATES)
+        gun = to_day(ham_tarih)
+        fiyat = pick(row, PRICE_FIELD_CANDIDATES)
+        if gun is None or fiyat is None:
+            continue
+        try:
+            fiyat = Decimal(str(fiyat))
+        except Exception:  # noqa: BLE001
+            continue
+
+        agirlik = Decimal(1)
+        if agirlikli:
+            saat = to_hour_key(ham_tarih)
+            agirlik = quantities.get(saat, Decimal(0)) if saat else Decimal(0)
+            # O saatin miktarı yoksa saati düşürmek yerine ağırlığı 1 saymak, günün
+            # tamamını kaybetmekten iyidir; ama bu artık saf ağırlıklı ortalama değil.
+            if agirlik <= 0:
+                agirlik = Decimal(1)
+
+        paylar[gun] = paylar.get(gun, Decimal(0)) + fiyat * agirlik
+        paydalar[gun] = paydalar.get(gun, Decimal(0)) + agirlik
+
+    return (
+        {
+            gun: (paylar[gun] / paydalar[gun]) if paydalar[gun] > 0 else Decimal(0)
+            for gun in paylar
+        },
+        agirlikli,
+    )
 
 
 def to_points(values: dict[str, Decimal], divisor: Decimal, scale: str) -> list[dict]:
@@ -199,10 +269,20 @@ def monthly_yekdem(values: dict[str, Decimal]) -> list[dict]:
 
 
 def build_catalog(
-    mcp_points: list[dict], yekdem_months: list[dict], generated_at: str
+    mcp_points: list[dict],
+    yekdem_months: list[dict],
+    generated_at: str,
+    weighted: bool = False,
 ) -> dict:
     series = []
     if mcp_points:
+        yontem = (
+            "Saatlik PTF, o saatte gün öncesi piyasasında eşleşen miktarla "
+            "ağırlıklandırılarak güne indirgendi."
+            if weighted
+            else "UYARI: eşleşme miktarı verisi alınamadı, saatlik PTF'lerin DÜZ ortalaması "
+            "alındı. Mevzuat ağırlıklı ortalama ister; bu değer yaklaşıktır."
+        )
         series.append(
             {
                 "id": "epias-ptf-gunluk",
@@ -210,8 +290,9 @@ def build_catalog(
                 "unit": "TL/kWh",
                 "points": mcp_points,
                 "source": "EPİAŞ Şeffaflık Platformu · gün öncesi piyasası takas fiyatı (MCP)",
-                "note": "Günlük PTF; MWh fiyatı kWh'e çevrildi. Son kaynak hesabında bu "
-                "günlerin ARİTMETİK ortalaması alınır (1 Nolu Açıklama md. 12).",
+                "placeholder": not weighted,
+                "note": yontem + " MWh fiyatı kWh'e çevrildi. Son kaynak hesabında bu "
+                "günlük değerlerin ARİTMETİK ortalaması alınır (1 Nolu Açıklama md. 12).",
             }
         )
     return {
@@ -293,6 +374,31 @@ def main() -> int:
                 tamam = False
             print()
 
+        print("=== GOP eslesme miktari (gunluk PTF'nin agirligi) ===")
+        bulundu = None
+        for path in MATCHING_QUANTITY_PATHS:
+            try:
+                satirlar = extract_rows(fetch(path, tgt, start, end, raw=True), path)
+            except Exception as hata:  # noqa: BLE001
+                print("    " + path + " -> " + str(hata)[:70])
+                continue
+            if satirlar:
+                bulundu = path
+                ornek = satirlar[0]
+                print("    BULUNDU: " + path)
+                print("    alanlar: " + ", ".join(ornek.keys()))
+                miktar_alani = next(
+                    (a for a in QUANTITY_FIELD_CANDIDATES if a in ornek), None
+                )
+                print("    miktar alani: " + (miktar_alani or "BULUNAMADI"))
+                if not miktar_alani:
+                    tamam = False
+                break
+        if bulundu is None:
+            print("    HICBIRI TUTMADI - duz ortalamaya dusulecek (mevzuat agirlikli ister).")
+            tamam = False
+        print()
+
         print("SONUC: " + ("her sey yerinde, ayna calismaya hazir."
                            if tamam else "eksik var - yukaridaki uyarilara bak."))
         return 0 if tamam else 1
@@ -300,8 +406,28 @@ def main() -> int:
     mcp_rows = fetch(MCP_PATH, tgt, start, end)
     yekdem_rows = fetch(YEKDEM_UNIT_COST_PATH, tgt, start, end)
 
+    # Ağırlık için eşleşme miktarı; uç adı sürümle değişebildiği için sırayla denenir.
+    miktarlar: dict[str, Decimal] = {}
+    for path in MATCHING_QUANTITY_PATHS:
+        try:
+            satirlar = fetch(path, tgt, start, end)
+        except Exception:  # noqa: BLE001 - uç yoksa sıradakine geç
+            continue
+        miktarlar = hourly_quantities(satirlar)
+        if miktarlar:
+            print("Eşleşme miktarı ucu: " + path)
+            break
+
+    gunluk, agirlikli = daily_weighted_average(mcp_rows, miktarlar)
+    if not agirlikli:
+        print(
+            "UYARI: eşleşme miktarı alınamadı, düz ortalama kullanıldı. "
+            "--dry-run çıktısındaki uç adlarına bakıp MATCHING_QUANTITY_PATHS listesini güncelle.",
+            file=sys.stderr,
+        )
+
     # PTF MWh başına TL olarak yayımlanır; uygulama kWh ile çalışıyor.
-    mcp_points = to_points(daily_average(mcp_rows), Decimal(1000), "0.000001")
+    mcp_points = to_points(gunluk, Decimal(1000), "0.000001")
 
     yekdem_values: dict[str, Decimal] = {}
     for row in yekdem_rows:
@@ -316,6 +442,7 @@ def main() -> int:
         mcp_points,
         yekdem_months,
         datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        weighted=agirlikli,
     )
 
     out_path = args.out
@@ -325,7 +452,8 @@ def main() -> int:
         handle.write("\n")
 
     print(
-        f"Yazıldı: {out_path} · PTF {len(mcp_points)} gün · YEKDEM {len(yekdem_months)} ay"
+        f"Yazıldı: {out_path} · PTF {len(mcp_points)} gün "
+        f"({'ağırlıklı' if agirlikli else 'DÜZ'} ortalama) · YEKDEM {len(yekdem_months)} ay"
     )
     return 0
 
