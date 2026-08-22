@@ -1,0 +1,40 @@
+name: Piyasa verisi
+
+# Yalnızca zamanlanmış ve elle tetikleme. pull_request TETİKLEYİCİSİ BİLİNÇLİ OLARAK YOK:
+# depo public olduğu için fork'tan gelen bir PR iş akışını çalıştırıp secret'lara
+# uzanamamalı.
+on:
+  schedule:
+    - cron: "20 4 * * *"   # her gün 04:20 UTC (07:20 TR)
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  guncelle:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: EPİAŞ'tan çek
+        env:
+          EPIAS_USERNAME: ${{ secrets.EPIAS_USERNAME }}
+          EPIAS_PASSWORD: ${{ secrets.EPIAS_PASSWORD }}
+        run: python tools/epias_mirror.py --days 90 --out data/piyasa/ptf-yekdem.json
+
+      - name: Değiştiyse yaz
+        run: |
+          if [ -n "$(git status --porcelain data/piyasa)" ]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add data/piyasa
+            git commit -m "Piyasa verisi güncellendi ($(date -u +%Y-%m-%d))"
+            git push
+          else
+            echo "Değişiklik yok."
+          fi
