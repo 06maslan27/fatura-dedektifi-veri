@@ -253,11 +253,49 @@ def main() -> int:
     tgt = login(username, password)
 
     if args.dry_run:
-        for path in (MCP_PATH, YEKDEM_UNIT_COST_PATH):
-            print(f"\n=== {path} ===")
-            document = fetch(path, tgt, start, end, raw=True)
-            print(json.dumps(document, ensure_ascii=False, indent=2)[:2000])
-        return 0
+        # Amaç ham JSON'u kusmak değil, tek bakışta "çalışıyor mu, hangi alanlar geldi,
+        # tahminlerimiz tuttu mu" sorusunu cevaplamak.
+        print("Giris basarili - TGT alindi.")
+        print()
+        tamam = True
+        for baslik, path in (
+            ("PTF (gun oncesi piyasasi takas fiyati)", MCP_PATH),
+            ("YEKDEM birim maliyeti", YEKDEM_UNIT_COST_PATH),
+        ):
+            print("=== " + baslik + " ===")
+            print("    uc: " + path)
+            try:
+                satirlar = extract_rows(fetch(path, tgt, start, end, raw=True), path)
+            except Exception as hata:  # noqa: BLE001 - teshis ciktisi
+                print("    HATA: " + str(hata))
+                print()
+                tamam = False
+                continue
+
+            print("    gelen kayit: " + str(len(satirlar)))
+            if not satirlar:
+                print("    UYARI: kayit yok - tarih araligi ya da uc adi degismis olabilir.")
+                print()
+                tamam = False
+                continue
+
+            ornek = satirlar[0]
+            print("    alanlar: " + ", ".join(ornek.keys()))
+            tarih_alani = next((a for a in DATE_FIELD_CANDIDATES if a in ornek), None)
+            deger_alani = next((a for a in PRICE_FIELD_CANDIDATES if a in ornek), None)
+            print("    tarih alani : " + (tarih_alani or "BULUNAMADI"))
+            print("    deger alani : " + (deger_alani or "BULUNAMADI"))
+            if tarih_alani and deger_alani:
+                print("    ornek       : {} -> {}".format(ornek[tarih_alani], ornek[deger_alani]))
+            else:
+                print("    UYARI: alan adlari degismis. Betikteki *_FIELD_CANDIDATES "
+                      "listelerine yukaridaki alan adini ekle.")
+                tamam = False
+            print()
+
+        print("SONUC: " + ("her sey yerinde, ayna calismaya hazir."
+                           if tamam else "eksik var - yukaridaki uyarilara bak."))
+        return 0 if tamam else 1
 
     mcp_rows = fetch(MCP_PATH, tgt, start, end)
     yekdem_rows = fetch(YEKDEM_UNIT_COST_PATH, tgt, start, end)
