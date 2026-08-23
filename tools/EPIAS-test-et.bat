@@ -2,28 +2,29 @@
 REM ---------------------------------------------------------------------------
 REM  EPIAS baglanti testi -- cift tikla, calistir.
 REM
-REM  Kullanici adini ve parolani sorar, EPIAS'a baglanir ve "veri geliyor mu,
-REM  alan adlari tutuyor mu" diye bakar. HICBIR DOSYA YAZMAZ, hicbir yere kayit
-REM  gondermez. Parola ekranda gorunmez ve hicbir yere kaydedilmez.
+REM  Kullanici adini ve parolani Python'un kendisi sorar (parola ekranda gorunmez).
+REM  HICBIR DOSYA YAZMAZ, hicbir yere veri gondermez. Sadece "veri geliyor mu,
+REM  alan adlari tutuyor mu" diye bakar.
 REM ---------------------------------------------------------------------------
 chcp 65001 >nul
 cd /d "%~dp0"
-echo.
-echo   EPIAS Seffaflik Platformu baglanti testi
-echo   ----------------------------------------
-echo.
-set /p EPIAS_USERNAME="  Kullanici adi (e-posta): "
 
-REM Parolayi ekranda gostermeden oku.
-for /f "delims=" %%p in ('powershell -NoProfile -Command ^
-  "$s=Read-Host -AsSecureString '  Parola'; ^
-   [Runtime.InteropServices.Marshal]::PtrToStringAuto( ^
-   [Runtime.InteropServices.Marshal]::SecureStringToBSTR($s))"') do set "EPIAS_PASSWORD=%%p"
+REM Python'u bul: once "python", olmazsa Windows'un "py" baslaticisi.
+set "PY="
+where python >nul 2>&1 && set "PY=python"
+if not defined PY ( where py >nul 2>&1 && set "PY=py" )
+
+if not defined PY (
+  echo.
+  echo   Python bulunamadi.
+  echo   python.org/downloads adresinden kurup "Add python.exe to PATH"
+  echo   kutusunu isaretlemen yeterli. Sonra bu dosyayi tekrar cift tikla.
+  echo.
+  pause
+  exit /b 1
+)
 
 echo.
-echo   Baglaniliyor...
-echo.
-python epias_mirror.py --dry-run
-set "EPIAS_PASSWORD="
+%PY% epias_mirror.py --dry-run
 echo.
 pause

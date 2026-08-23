@@ -27,6 +27,7 @@ import json
 import os
 import sys
 import urllib.error
+import getpass
 import urllib.parse
 import urllib.request
 from datetime import date, datetime, timedelta, timezone
@@ -318,20 +319,47 @@ def main() -> int:
     )
     args = parser.parse_args()
 
+    # Kimlik önce ortam değişkeninden (GitHub Actions böyle çalışır), yoksa ekrandan
+    # sorulur. Parolayı batch dosyasında okumak kırılgandı (for /f PowerShell'in çıktısını
+    # yakalayınca soru ekrana hiç basılmıyordu); buraya alındı. getpass parolayı ekranda
+    # GÖSTERMEZ ve hiçbir yere kaydetmez.
     username = os.environ.get("EPIAS_USERNAME")
     password = os.environ.get("EPIAS_PASSWORD")
+
     if not username or not password:
-        print(
-            "EPIAS_USERNAME ve EPIAS_PASSWORD ortam değişkenleri gerekli.\n"
-            "EPİAŞ Şeffaflık Platformu'na kayıt olup kendi hesabını kullan.",
-            file=sys.stderr,
-        )
-        return 2
+        if not sys.stdin.isatty():
+            print(
+                "EPIAS_USERNAME ve EPIAS_PASSWORD ortam degiskenleri gerekli.",
+                file=sys.stderr,
+            )
+            return 2
+        print("EPIAS Seffaflik Platformu girisi")
+        print("(parola yazarken ekranda gorunmez, hicbir yere kaydedilmez)")
+        print()
+        if not username:
+            username = input("  Kullanici adi (e-posta): ").strip()
+        if not password:
+            password = getpass.getpass("  Parola: ")
+        print()
+        if not username or not password:
+            print("Kullanici adi ve parola bos olamaz.", file=sys.stderr)
+            return 2
 
     end = date.today() + timedelta(days=1)
     start = end - timedelta(days=args.days)
 
-    tgt = login(username, password)
+    try:
+        tgt = login(username, password)
+    except EpiasError as hata:
+        print()
+        print("GIRIS BASARISIZ: " + str(hata), file=sys.stderr)
+        print(
+            "Not: EPIAS Seffaflik Platformu hesabi ile giris yapilir. Ayni parolayla "
+            "tarayicidan seffaflik.epias.com.tr adresine girebiliyor musun? Giremiyorsan "
+            "hesap henuz onaylanmamis olabilir.",
+            file=sys.stderr,
+        )
+        return 3
 
     if args.dry_run:
         # Amaç ham JSON'u kusmak değil, tek bakışta "çalışıyor mu, hangi alanlar geldi,
