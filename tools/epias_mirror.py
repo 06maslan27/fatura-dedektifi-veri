@@ -71,8 +71,24 @@ MATCHING_QUANTITY_PATHS = (
 DAILY_MCP_PATHS = (
     "/electricity-service/v1/markets/dam/data/mcp-daily",
     "/electricity-service/v1/markets/dam/data/daily-mcp",
+    "/electricity-service/v1/markets/dam/data/mcp-daily-average",
     "/electricity-service/v1/markets/dam/data/weighted-average-mcp",
     "/electricity-service/v1/markets/dam/data/mcp-weighted-average",
+    "/electricity-service/v1/markets/dam/data/mcp-summary",
+)
+
+# Bazı EPİAŞ uçları aynı yolda gövdeye konan bir alanla günlük toplulaştırma kabul ediyor.
+DAILY_BODY_VARIANTS = (
+    {"granularity": "DAILY"},
+    {"period": "DAILY"},
+    {"periodType": "DAILY"},
+    {"aggregationType": "DAILY"},
+)
+
+# Günlük ağırlıklı ortalamanın hangi alandan geleceği de sürüme bağlı.
+DAILY_PRICE_FIELD_CANDIDATES = (
+    "weightedAverage", "weightedAveragePrice", "wap", "dailyAverage",
+    "averagePrice", "price", "mcp",
 )
 
 TIMEZONE_SUFFIX = "+03:00"
@@ -131,13 +147,21 @@ def son_yayim_gunu() -> date:
     return bugun + timedelta(days=1) if datetime.now().hour >= 14 else bugun
 
 
-def fetch(path: str, tgt: str, start: date, end: date, raw: bool = False):
-    payload = json.dumps(
-        {
-            "startDate": f"{start.isoformat()}T00:00:00{TIMEZONE_SUFFIX}",
-            "endDate": f"{end.isoformat()}T00:00:00{TIMEZONE_SUFFIX}",
-        }
-    ).encode()
+def fetch(
+    path: str,
+    tgt: str,
+    start: date,
+    end: date,
+    raw: bool = False,
+    extra: dict | None = None,
+):
+    govde = {
+        "startDate": f"{start.isoformat()}T00:00:00{TIMEZONE_SUFFIX}",
+        "endDate": f"{end.isoformat()}T00:00:00{TIMEZONE_SUFFIX}",
+    }
+    if extra:
+        govde.update(extra)
+    payload = json.dumps(govde).encode()
     request = urllib.request.Request(
         BASE_URL + path,
         data=payload,
@@ -151,7 +175,7 @@ def fetch(path: str, tgt: str, start: date, end: date, raw: bool = False):
         detail = exc.read().decode("utf-8", errors="replace")[:400]
         # Yayımlanmamış gün istendiyse aralığı bir gün kısaltıp bir kez daha dene.
         if exc.code == 400 and "mevcut de" in detail and end > start + timedelta(days=1):
-            return fetch(path, tgt, start, end - timedelta(days=1), raw=raw)
+            return fetch(path, tgt, start, end - timedelta(days=1), raw=raw, extra=extra)
         raise EpiasError(f"{path} çağrısı başarısız (HTTP {exc.code}): {detail}") from exc
 
     if raw:
@@ -300,21 +324,94 @@ def monthly_yekdem(values: dict[str, Decimal]) -> list[dict]:
     return kayitlar
 
 
+YONTEM_ACIKLAMA = {
+    "yayimlanan": "EPİAŞ'ın Türkiye için günlük açıkladığı ağırlıklı ortalama PTF olduğu "
+                  "gibi alındı (1 Nolu Açıklama md. 12).",
+    "agirlikli": "EPİAŞ günlük ortalama yayımlamadığı için saatlik PTF, o saatte gün "
+                 "öncesi piyasasında eşleşen miktarla ağırlıklandırılarak güne indirgendi.",
+    "duz": "UYARI: ne yayımlanan günlük ortalama ne de eşleşme miktarı alınabildi; "
+           "saatlik PTF'lerin DÜZ ortalaması kullanıldı. Mevzuat ağırlıklı ortalama "
+           "ister — bu değer YAKLAŞIKTIR.",
+}
+
+
+def gunluk_seri(satirlar: list) -> dict:
+    """Günlük yanıttan gün → fiyat sözlüğü çıkarır."""
+    sonuc: dict[str, Decimal] = {}
+    for row in satirlar:
+        gun = to_day(pick(row, DATE_FIELD_CANDIDATES))
+        fiyat = pick(row, DAILY_PRICE_FIELD_CANDIDATES)
+        if gun is None or fiyat is None:
+            continue
+        try:
+            sonuc[gun] = Decimal(str(fiyat))
+        except Exception:  # noqa: BLE001 - bozuk satırı atla
+            continue
+    return sonuc
+
+
+def gunluk_ptf_bul(tgt: str, start: date, end: date) -> tuple:
+    """
+    Günlük PTF'yi bulur ve HANGİ YOLDAN bulunduğunu söyler.
+
+    Öncelik sırası doğrudan mevzuattan (1 Nolu Açıklama md. 12: "EPİAŞ tarafından
+    günlük AÇIKLANAN ağırlıklı ortalama"): ortalamayı biz hesaplamayız, EPİAŞ açıklar.
+
+      1. EPİAŞ'ın yayımladığı günlük ağırlıklı ortalama  → olduğu gibi alınır
+      2. Saatlik PTF + eşleşme miktarı                   → ağırlıklı ortalama türetilir
+      3. Yalnızca saatlik PTF                            → düz ortalama (yaklaşık)
+
+    Dönüş: (gün → TL/MWh sözlüğü, yöntem etiketi)
+    """
+    # 1) Yayımlanmış günlük değer — ayrı uçlar
+    for path in DAILY_MCP_PATHS:
+        try:
+            degerler = gunluk_seri(fetch(path, tgt, start, end))
+        except Exception:  # noqa: BLE001 - uç yoksa sıradakine geç
+            continue
+        if degerler:
+            return degerler, "yayimlanan", path.rsplit("/", 1)[-1]
+
+    # 1b) Aynı uç, gövdeye günlük toplulaştırma alanı koyarak. Saatlik yanıt gün başına
+    #     24 kayıt verir; günlük yanıt gün sayısı kadar. Ayrımı buradan yapıyoruz.
+    gun_sayisi = (end - start).days
+    for ek in DAILY_BODY_VARIANTS:
+        try:
+            satirlar = fetch(MCP_PATH, tgt, start, end, extra=ek)
+        except Exception:  # noqa: BLE001
+            continue
+        if satirlar and len(satirlar) <= gun_sayisi + 2:
+            degerler = gunluk_seri(satirlar)
+            if degerler:
+                return degerler, "yayimlanan", "mcp+" + next(iter(ek))
+
+    # 2/3) Türetme
+    mcp_satirlari = fetch(MCP_PATH, tgt, start, end)
+    miktarlar: dict[str, Decimal] = {}
+    for path in MATCHING_QUANTITY_PATHS:
+        try:
+            miktarlar = hourly_quantities(fetch(path, tgt, start, end))
+        except Exception:  # noqa: BLE001
+            continue
+        if miktarlar:
+            break
+    gunluk, agirlikli = daily_weighted_average(mcp_satirlari, miktarlar)
+    return gunluk, ("agirlikli" if agirlikli else "duz"), ""
+
+
 def build_catalog(
     mcp_points: list[dict],
     yekdem_months: list[dict],
     generated_at: str,
-    weighted: bool = False,
+    method: str = "duz",
+    method_detail: str = "",
 ) -> dict:
     series = []
     if mcp_points:
-        yontem = (
-            "Saatlik PTF, o saatte gün öncesi piyasasında eşleşen miktarla "
-            "ağırlıklandırılarak güne indirgendi."
-            if weighted
-            else "UYARI: eşleşme miktarı verisi alınamadı, saatlik PTF'lerin DÜZ ortalaması "
-            "alındı. Mevzuat ağırlıklı ortalama ister; bu değer yaklaşıktır."
-        )
+        weighted = method in ("yayimlanan", "agirlikli")
+        yontem = YONTEM_ACIKLAMA.get(method, YONTEM_ACIKLAMA["duz"])
+        if method_detail:
+            yontem += " (uç: " + method_detail + ")"
         series.append(
             {
                 "id": "epias-ptf-gunluk",
@@ -473,7 +570,25 @@ def main() -> int:
                 print("    alanlar: " + ", ".join(satirlar[0].keys()))
                 break
         if gunluk_uc is None:
-            print("    yok - gunluk ortalama saatlikten turetilecek")
+            gun_sayisi = (end - start).days
+            for ek in DAILY_BODY_VARIANTS:
+                anahtar = next(iter(ek))
+                try:
+                    satirlar = extract_rows(
+                        fetch(MCP_PATH, tgt, start, end, raw=True, extra=ek), MCP_PATH
+                    )
+                except Exception as hata:  # noqa: BLE001
+                    print("    {:<34} {}".format("mcp + " + anahtar, hata_ozeti(hata)))
+                    continue
+                if satirlar and len(satirlar) <= gun_sayisi + 2:
+                    gunluk_uc = "mcp + " + anahtar
+                    print("    BULUNDU: mcp ucu + " + anahtar + "=DAILY")
+                    print("    alanlar: " + ", ".join(satirlar[0].keys()))
+                    break
+                print("    {:<34} {} kayit - saatlik, gunluk degil".format(
+                    "mcp + " + anahtar, len(satirlar)))
+        if gunluk_uc is None:
+            print("    YOK - gunluk ortalamayi saatlikten turetmemiz gerekecek")
         print()
 
         print("=== GOP eslesme miktari (saatlikten turetirken agirlik) ===")
@@ -498,26 +613,15 @@ def main() -> int:
                            if tamam else "eksik var - yukaridaki uyarilara bak."))
         return 0 if tamam else 1
 
-    mcp_rows = fetch(MCP_PATH, tgt, start, end)
     yekdem_rows = fetch(YEKDEM_UNIT_COST_PATH, tgt, start, end)
 
-    # Ağırlık için eşleşme miktarı; uç adı sürümle değişebildiği için sırayla denenir.
-    miktarlar: dict[str, Decimal] = {}
-    for path in MATCHING_QUANTITY_PATHS:
-        try:
-            satirlar = fetch(path, tgt, start, end)
-        except Exception:  # noqa: BLE001 - uç yoksa sıradakine geç
-            continue
-        miktarlar = hourly_quantities(satirlar)
-        if miktarlar:
-            print("Eşleşme miktarı ucu: " + path)
-            break
-
-    gunluk, agirlikli = daily_weighted_average(mcp_rows, miktarlar)
-    if not agirlikli:
+    # Günlük PTF: önce EPİAŞ'ın yayımladığı ağırlıklı ortalama, olmazsa türetme.
+    gunluk, yontem, yontem_detay = gunluk_ptf_bul(tgt, start, end)
+    print("PTF yöntemi: " + yontem + (" (" + yontem_detay + ")" if yontem_detay else ""))
+    if yontem == "duz":
         print(
-            "UYARI: eşleşme miktarı alınamadı, düz ortalama kullanıldı. "
-            "--dry-run çıktısındaki uç adlarına bakıp MATCHING_QUANTITY_PATHS listesini güncelle.",
+            "UYARI: ne yayımlanan günlük ortalama ne de eşleşme miktarı alınabildi; "
+            "düz ortalama kullanıldı. --dry-run çıktısına bakıp uç adlarını güncelle.",
             file=sys.stderr,
         )
 
@@ -537,7 +641,8 @@ def main() -> int:
         mcp_points,
         yekdem_months,
         datetime.now(timezone.utc).isoformat(timespec="seconds"),
-        weighted=agirlikli,
+        method=yontem,
+        method_detail=yontem_detay,
     )
 
     out_path = args.out
@@ -547,8 +652,8 @@ def main() -> int:
         handle.write("\n")
 
     print(
-        f"Yazıldı: {out_path} · PTF {len(mcp_points)} gün "
-        f"({'ağırlıklı' if agirlikli else 'DÜZ'} ortalama) · YEKDEM {len(yekdem_months)} ay"
+        f"Yazıldı: {out_path} · PTF {len(mcp_points)} gün ({yontem}) "
+        f"· YEKDEM {len(yekdem_months)} ay"
     )
     return 0
 
