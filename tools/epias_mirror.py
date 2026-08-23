@@ -25,6 +25,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import sys
 import urllib.error
 import getpass
@@ -55,9 +56,23 @@ YEKDEM_UNIT_COST_PATH = "/electricity-service/v1/renewables/data/unit-cost"  # Y
 # yöntem kullanılmasın.
 MATCHING_QUANTITY_PATHS = (
     "/electricity-service/v1/markets/dam/data/matching-quantity",
+    "/electricity-service/v1/markets/dam/data/clearing-quantity",
+    "/electricity-service/v1/markets/dam/data/dam-clearing-quantity",
     "/electricity-service/v1/markets/dam/data/dam-volume",
-    "/electricity-service/v1/markets/dam/data/day-ahead-market-trade-volume",
     "/electricity-service/v1/markets/dam/data/trade-volume",
+    "/electricity-service/v1/markets/dam/data/day-ahead-market-trade-volume",
+)
+
+# EPİAŞ'ın DOĞRUDAN yayımladığı günlük ağırlıklı ortalama PTF.
+#
+# 1 Nolu Açıklama md. 12 "EPİAŞ tarafından günlük AÇIKLANAN ağırlıklı ortalama piyasa
+# takas fiyatları" der — yani ortalamayı biz hesaplamayız, EPİAŞ açıklar. Böyle bir uç
+# varsa saatlikten türetmeye hiç gerek kalmaz ve tartışma biter.
+DAILY_MCP_PATHS = (
+    "/electricity-service/v1/markets/dam/data/mcp-daily",
+    "/electricity-service/v1/markets/dam/data/daily-mcp",
+    "/electricity-service/v1/markets/dam/data/weighted-average-mcp",
+    "/electricity-service/v1/markets/dam/data/mcp-weighted-average",
 )
 
 TIMEZONE_SUFFIX = "+03:00"
@@ -103,6 +118,19 @@ def login(username: str, password: str) -> str:
     raise EpiasError(f"TGT bulunamadı. Yanıt: {payload[:200]!r} Location: {location!r}")
 
 
+def son_yayim_gunu() -> date:
+    """
+    İstenebilecek EN SON gün (hariç sınır).
+
+    Gün öncesi piyasası sonuçları o gün saat 14:00'ten önce yayımlanmıyor; erken saatte
+    yarını istemek isteğin TAMAMINI 400 ile düşürüyor ("... tarihli veri saat 14
+    öncesinde mevcut değil"). Bu yüzden saat 14'ten önce yalnızca bugüne kadar
+    (bugün hariç), sonrasında yarına kadar istiyoruz.
+    """
+    bugun = date.today()
+    return bugun + timedelta(days=1) if datetime.now().hour >= 14 else bugun
+
+
 def fetch(path: str, tgt: str, start: date, end: date, raw: bool = False):
     payload = json.dumps(
         {
@@ -121,6 +149,9 @@ def fetch(path: str, tgt: str, start: date, end: date, raw: bool = False):
             document = json.loads(response.read().decode("utf-8"))
     except urllib.error.HTTPError as exc:
         detail = exc.read().decode("utf-8", errors="replace")[:400]
+        # Yayımlanmamış gün istendiyse aralığı bir gün kısaltıp bir kez daha dene.
+        if exc.code == 400 and "mevcut de" in detail and end > start + timedelta(days=1):
+            return fetch(path, tgt, start, end - timedelta(days=1), raw=raw)
         raise EpiasError(f"{path} çağrısı başarısız (HTTP {exc.code}): {detail}") from exc
 
     if raw:
@@ -345,7 +376,7 @@ def main() -> int:
             print("Kullanici adi ve parola bos olamaz.", file=sys.stderr)
             return 2
 
-    end = date.today() + timedelta(days=1)
+    end = son_yayim_gunu()
     start = end - timedelta(days=args.days)
 
     try:
@@ -365,64 +396,100 @@ def main() -> int:
         # Amaç ham JSON'u kusmak değil, tek bakışta "çalışıyor mu, hangi alanlar geldi,
         # tahminlerimiz tuttu mu" sorusunu cevaplamak.
         print("Giris basarili - TGT alindi.")
+        print("Istenen aralik: " + start.isoformat() + " .. " + end.isoformat() + " (bitis haric)")
         print()
         tamam = True
-        for baslik, path in (
-            ("PTF (gun oncesi piyasasi takas fiyati)", MCP_PATH),
-            ("YEKDEM birim maliyeti", YEKDEM_UNIT_COST_PATH),
-        ):
+
+        def hata_ozeti(hata: Exception) -> str:
+            """Sadece errorCode + errorMessage; JSON gurultusu okumayi engelliyordu."""
+            metin = str(hata)
+            kod = re.search(r'"errorCode"\s*:\s*"([^"]+)"', metin)
+            mesaj = re.search(r'"errorMessage"\s*:\s*"([^"]+)"', metin)
+            http = re.search(r"HTTP (\d+)", metin)
+            parcalar = []
+            if http:
+                parcalar.append("HTTP " + http.group(1))
+            if kod:
+                parcalar.append(kod.group(1))
+            if mesaj:
+                parcalar.append(mesaj.group(1))
+            return " | ".join(parcalar) if parcalar else metin[:160]
+
+        def incele(baslik: str, path: str, deger_adaylari) -> list:
             print("=== " + baslik + " ===")
             print("    uc: " + path)
             try:
                 satirlar = extract_rows(fetch(path, tgt, start, end, raw=True), path)
             except Exception as hata:  # noqa: BLE001 - teshis ciktisi
-                print("    HATA: " + str(hata))
+                print("    HATA: " + hata_ozeti(hata))
                 print()
-                tamam = False
-                continue
-
+                return []
             print("    gelen kayit: " + str(len(satirlar)))
             if not satirlar:
-                print("    UYARI: kayit yok - tarih araligi ya da uc adi degismis olabilir.")
+                print("    UYARI: kayit yok.")
                 print()
-                tamam = False
-                continue
-
+                return []
             ornek = satirlar[0]
             print("    alanlar: " + ", ".join(ornek.keys()))
             tarih_alani = next((a for a in DATE_FIELD_CANDIDATES if a in ornek), None)
-            deger_alani = next((a for a in PRICE_FIELD_CANDIDATES if a in ornek), None)
             print("    tarih alani : " + (tarih_alani or "BULUNAMADI"))
-            print("    deger alani : " + (deger_alani or "BULUNAMADI"))
-            if tarih_alani and deger_alani:
-                print("    ornek       : {} -> {}".format(ornek[tarih_alani], ornek[deger_alani]))
-            else:
-                print("    UYARI: alan adlari degismis. Betikteki *_FIELD_CANDIDATES "
-                      "listelerine yukaridaki alan adini ekle.")
-                tamam = False
+            # Sayisal alanlarin HEPSINI goster: hangisinin dogru oldugunu alan uzmani secer.
+            for alan, deger in ornek.items():
+                if alan != tarih_alani and isinstance(deger, (int, float)):
+                    print("      {:<20} = {}".format(alan, deger))
+            print()
+            return satirlar
+
+        mcp = incele("PTF (gun oncesi piyasasi takas fiyati)", MCP_PATH, PRICE_FIELD_CANDIDATES)
+        if not mcp:
+            tamam = False
+
+        yekdem = incele("YEKDEM birim maliyeti", YEKDEM_UNIT_COST_PATH, PRICE_FIELD_CANDIDATES)
+        if not yekdem:
+            tamam = False
+        elif len(yekdem) > 1:
+            print("    YEKDEM son kayitlar:")
+            for satir in yekdem[-6:]:
+                donem = pick(satir, DATE_FIELD_CANDIDATES)
+                print("      {}  unitCost={}  supplierUnitCost={}  ptf={}".format(
+                    str(donem)[:10],
+                    satir.get("unitCost"),
+                    satir.get("supplierUnitCost"),
+                    satir.get("ptf"),
+                ))
             print()
 
-        print("=== GOP eslesme miktari (gunluk PTF'nin agirligi) ===")
-        bulundu = None
+        print("=== EPIAS'in DOGRUDAN yayimladigi gunluk agirlikli ortalama PTF ===")
+        gunluk_uc = None
+        for path in DAILY_MCP_PATHS:
+            try:
+                satirlar = extract_rows(fetch(path, tgt, start, end, raw=True), path)
+            except Exception as hata:  # noqa: BLE001
+                print("    {:<62} {}".format(path.rsplit("/", 1)[-1], hata_ozeti(hata)))
+                continue
+            if satirlar:
+                gunluk_uc = path
+                print("    BULUNDU: " + path)
+                print("    alanlar: " + ", ".join(satirlar[0].keys()))
+                break
+        if gunluk_uc is None:
+            print("    yok - gunluk ortalama saatlikten turetilecek")
+        print()
+
+        print("=== GOP eslesme miktari (saatlikten turetirken agirlik) ===")
+        miktar_uc = None
         for path in MATCHING_QUANTITY_PATHS:
             try:
                 satirlar = extract_rows(fetch(path, tgt, start, end, raw=True), path)
             except Exception as hata:  # noqa: BLE001
-                print("    " + path + " -> " + str(hata)[:70])
+                print("    {:<62} {}".format(path.rsplit("/", 1)[-1], hata_ozeti(hata)))
                 continue
             if satirlar:
-                bulundu = path
-                ornek = satirlar[0]
+                miktar_uc = path
                 print("    BULUNDU: " + path)
-                print("    alanlar: " + ", ".join(ornek.keys()))
-                miktar_alani = next(
-                    (a for a in QUANTITY_FIELD_CANDIDATES if a in ornek), None
-                )
-                print("    miktar alani: " + (miktar_alani or "BULUNAMADI"))
-                if not miktar_alani:
-                    tamam = False
+                print("    alanlar: " + ", ".join(satirlar[0].keys()))
                 break
-        if bulundu is None:
+        if miktar_uc is None and gunluk_uc is None:
             print("    HICBIRI TUTMADI - duz ortalamaya dusulecek (mevzuat agirlikli ister).")
             tamam = False
         print()
