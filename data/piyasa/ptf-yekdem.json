@@ -1,8 +1,405 @@
 {
   "schemaVersion": 1,
   "title": "EPİAŞ piyasa verisi",
-  "generatedAt": "",
+  "generatedAt": "2026-08-25T15:11:34+00:00",
   "disclaimer": "Bu dosya EPİAŞ Şeffaflık Platformu'ndan otomatik çekilen kamuya açık piyasa verisidir. Uygulama yalnızca bu dosyayı indirir; EPİAŞ'a kullanıcı verisi gönderilmez.",
-  "priceSeries": [],
-  "yekdemUnitCosts": []
+  "priceSeries": [
+    {
+      "id": "epias-ptf-gunluk",
+      "name": "PTF (günlük ağırlıklı ortalama)",
+      "unit": "TL/kWh",
+      "points": [
+        {
+          "date": "2026-05-28",
+          "price": "0.152898"
+        },
+        {
+          "date": "2026-05-29",
+          "price": "0.078410"
+        },
+        {
+          "date": "2026-05-30",
+          "price": "0.142534"
+        },
+        {
+          "date": "2026-05-31",
+          "price": "0.754042"
+        },
+        {
+          "date": "2026-06-01",
+          "price": "1.298275"
+        },
+        {
+          "date": "2026-06-02",
+          "price": "1.657985"
+        },
+        {
+          "date": "2026-06-03",
+          "price": "0.976284"
+        },
+        {
+          "date": "2026-06-04",
+          "price": "1.183395"
+        },
+        {
+          "date": "2026-06-05",
+          "price": "1.662410"
+        },
+        {
+          "date": "2026-06-06",
+          "price": "1.235751"
+        },
+        {
+          "date": "2026-06-07",
+          "price": "0.388126"
+        },
+        {
+          "date": "2026-06-08",
+          "price": "0.764593"
+        },
+        {
+          "date": "2026-06-09",
+          "price": "1.377244"
+        },
+        {
+          "date": "2026-06-10",
+          "price": "1.934765"
+        },
+        {
+          "date": "2026-06-11",
+          "price": "1.733000"
+        },
+        {
+          "date": "2026-06-12",
+          "price": "1.478224"
+        },
+        {
+          "date": "2026-06-13",
+          "price": "0.689554"
+        },
+        {
+          "date": "2026-06-14",
+          "price": "0.533857"
+        },
+        {
+          "date": "2026-06-15",
+          "price": "1.370626"
+        },
+        {
+          "date": "2026-06-16",
+          "price": "1.413685"
+        },
+        {
+          "date": "2026-06-17",
+          "price": "1.095893"
+        },
+        {
+          "date": "2026-06-18",
+          "price": "0.764416"
+        },
+        {
+          "date": "2026-06-19",
+          "price": "0.631890"
+        },
+        {
+          "date": "2026-06-20",
+          "price": "0.573410"
+        },
+        {
+          "date": "2026-06-21",
+          "price": "0.378002"
+        },
+        {
+          "date": "2026-06-22",
+          "price": "0.908949"
+        },
+        {
+          "date": "2026-06-23",
+          "price": "1.564503"
+        },
+        {
+          "date": "2026-06-24",
+          "price": "2.111627"
+        },
+        {
+          "date": "2026-06-25",
+          "price": "1.744731"
+        },
+        {
+          "date": "2026-06-26",
+          "price": "1.729220"
+        },
+        {
+          "date": "2026-06-27",
+          "price": "1.313152"
+        },
+        {
+          "date": "2026-06-28",
+          "price": "0.773166"
+        },
+        {
+          "date": "2026-06-29",
+          "price": "1.729080"
+        },
+        {
+          "date": "2026-06-30",
+          "price": "2.189036"
+        },
+        {
+          "date": "2026-07-01",
+          "price": "3.287759"
+        },
+        {
+          "date": "2026-07-02",
+          "price": "3.299279"
+        },
+        {
+          "date": "2026-07-03",
+          "price": "3.194629"
+        },
+        {
+          "date": "2026-07-04",
+          "price": "2.438248"
+        },
+        {
+          "date": "2026-07-05",
+          "price": "1.430858"
+        },
+        {
+          "date": "2026-07-06",
+          "price": "2.294712"
+        },
+        {
+          "date": "2026-07-07",
+          "price": "2.712165"
+        },
+        {
+          "date": "2026-07-08",
+          "price": "2.852760"
+        },
+        {
+          "date": "2026-07-09",
+          "price": "3.218706"
+        },
+        {
+          "date": "2026-07-10",
+          "price": "3.165206"
+        },
+        {
+          "date": "2026-07-11",
+          "price": "2.501610"
+        },
+        {
+          "date": "2026-07-12",
+          "price": "2.085324"
+        },
+        {
+          "date": "2026-07-13",
+          "price": "2.630263"
+        },
+        {
+          "date": "2026-07-14",
+          "price": "2.641345"
+        },
+        {
+          "date": "2026-07-15",
+          "price": "2.274108"
+        },
+        {
+          "date": "2026-07-16",
+          "price": "2.885225"
+        },
+        {
+          "date": "2026-07-17",
+          "price": "2.790908"
+        },
+        {
+          "date": "2026-07-18",
+          "price": "2.624645"
+        },
+        {
+          "date": "2026-07-19",
+          "price": "2.501674"
+        },
+        {
+          "date": "2026-07-20",
+          "price": "3.180555"
+        },
+        {
+          "date": "2026-07-21",
+          "price": "3.077651"
+        },
+        {
+          "date": "2026-07-22",
+          "price": "3.607747"
+        },
+        {
+          "date": "2026-07-23",
+          "price": "3.185800"
+        },
+        {
+          "date": "2026-07-24",
+          "price": "3.361373"
+        },
+        {
+          "date": "2026-07-25",
+          "price": "2.428623"
+        },
+        {
+          "date": "2026-07-26",
+          "price": "2.372169"
+        },
+        {
+          "date": "2026-07-27",
+          "price": "2.875535"
+        },
+        {
+          "date": "2026-07-28",
+          "price": "2.691895"
+        },
+        {
+          "date": "2026-07-29",
+          "price": "1.850376"
+        },
+        {
+          "date": "2026-07-30",
+          "price": "2.086240"
+        },
+        {
+          "date": "2026-07-31",
+          "price": "2.140632"
+        },
+        {
+          "date": "2026-08-01",
+          "price": "2.356376"
+        },
+        {
+          "date": "2026-08-02",
+          "price": "2.325263"
+        },
+        {
+          "date": "2026-08-03",
+          "price": "3.432818"
+        },
+        {
+          "date": "2026-08-04",
+          "price": "3.193208"
+        },
+        {
+          "date": "2026-08-05",
+          "price": "3.219873"
+        },
+        {
+          "date": "2026-08-06",
+          "price": "3.280598"
+        },
+        {
+          "date": "2026-08-07",
+          "price": "3.378676"
+        },
+        {
+          "date": "2026-08-08",
+          "price": "2.753650"
+        },
+        {
+          "date": "2026-08-09",
+          "price": "1.980206"
+        },
+        {
+          "date": "2026-08-10",
+          "price": "2.749050"
+        },
+        {
+          "date": "2026-08-11",
+          "price": "3.149457"
+        },
+        {
+          "date": "2026-08-12",
+          "price": "3.045545"
+        },
+        {
+          "date": "2026-08-13",
+          "price": "2.731110"
+        },
+        {
+          "date": "2026-08-14",
+          "price": "2.737399"
+        },
+        {
+          "date": "2026-08-15",
+          "price": "2.401096"
+        },
+        {
+          "date": "2026-08-16",
+          "price": "2.502892"
+        },
+        {
+          "date": "2026-08-17",
+          "price": "3.414100"
+        },
+        {
+          "date": "2026-08-18",
+          "price": "3.371305"
+        },
+        {
+          "date": "2026-08-19",
+          "price": "3.109248"
+        },
+        {
+          "date": "2026-08-20",
+          "price": "3.083752"
+        },
+        {
+          "date": "2026-08-21",
+          "price": "3.184176"
+        },
+        {
+          "date": "2026-08-22",
+          "price": "3.433629"
+        },
+        {
+          "date": "2026-08-23",
+          "price": "2.405143"
+        },
+        {
+          "date": "2026-08-24",
+          "price": "2.732451"
+        },
+        {
+          "date": "2026-08-25",
+          "price": "3.039214"
+        },
+        {
+          "date": "2026-08-26",
+          "price": "3.634984"
+        }
+      ],
+      "source": "EPİAŞ Şeffaflık Platformu · gün öncesi piyasası takas fiyatı (MCP)",
+      "placeholder": true,
+      "note": "UYARI: ne yayımlanan günlük ortalama ne de eşleşme miktarı alınabildi; saatlik PTF'lerin DÜZ ortalaması kullanıldı. Mevzuat ağırlıklı ortalama ister — bu değer YAKLAŞIKTIR. MWh fiyatı kWh'e çevrildi. Son kaynak hesabında bu günlük değerlerin ARİTMETİK ortalaması alınır (1 Nolu Açıklama md. 12)."
+    }
+  ],
+  "yekdemUnitCosts": [
+    {
+      "year": 2026,
+      "month": 5,
+      "unitCostPerMwh": "1317.24",
+      "actual": true,
+      "source": "EPİAŞ Şeffaflık Platformu · YEKDEM birim maliyeti (gerçekleşen)"
+    },
+    {
+      "year": 2026,
+      "month": 6,
+      "unitCostPerMwh": "1086.87",
+      "actual": true,
+      "source": "EPİAŞ Şeffaflık Platformu · YEKDEM birim maliyeti (gerçekleşen)"
+    },
+    {
+      "year": 2026,
+      "month": 7,
+      "unitCostPerMwh": "486.31",
+      "actual": true,
+      "source": "EPİAŞ Şeffaflık Platformu · YEKDEM birim maliyeti (gerçekleşen)"
+    }
+  ]
 }
