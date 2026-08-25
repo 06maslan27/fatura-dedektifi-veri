@@ -56,11 +56,18 @@ YEKDEM_UNIT_COST_PATH = "/electricity-service/v1/renewables/data/unit-cost"  # Y
 # yöntem kullanılmasın.
 MATCHING_QUANTITY_PATHS = (
     "/electricity-service/v1/markets/dam/data/matching-quantity",
+    "/electricity-service/v1/markets/dam/data/matched-quantity",
     "/electricity-service/v1/markets/dam/data/clearing-quantity",
     "/electricity-service/v1/markets/dam/data/dam-clearing-quantity",
     "/electricity-service/v1/markets/dam/data/dam-volume",
     "/electricity-service/v1/markets/dam/data/trade-volume",
+    "/electricity-service/v1/markets/dam/data/trade-value",
+    "/electricity-service/v1/markets/dam/data/market-volume",
     "/electricity-service/v1/markets/dam/data/day-ahead-market-trade-volume",
+    "/electricity-service/v1/markets/dam/data/amount-of-bids",
+    "/electricity-service/v1/markets/dam/data/submitted-bid-order-volume",
+    "/electricity-service/v1/markets/dam/data/block-amount",
+    "/electricity-service/v1/markets/dam/data/supply-demand",
 )
 
 # EPİAŞ'ın DOĞRUDAN yayımladığı günlük ağırlıklı ortalama PTF.
@@ -441,6 +448,11 @@ def main() -> int:
     parser.add_argument("--days", type=int, default=60, help="Kaç günlük geçmiş çekilsin")
     parser.add_argument("--out", default="data/piyasa/ptf-yekdem.json")
     parser.add_argument(
+        "--probe",
+        action="store_true",
+        help="Aday uçları tek tek yoklar; hangisinin var olduğunu HTTP koduyla söyler.",
+    )
+    parser.add_argument(
         "--dry-run",
         action="store_true",
         help="Ham yanıtı yazdırır; alan adlarını doğrulamak için ilk çalıştırmada kullan.",
@@ -488,6 +500,37 @@ def main() -> int:
             file=sys.stderr,
         )
         return 3
+
+    if args.probe:
+        # HTTP 404 = uc yok · 400 = uc VAR ama istek/tarih yanlis · 200 = calisiyor.
+        # Bu ayrim sayesinde dogru uc adini deneme yanilma ile bulabiliyoruz.
+        print("Aday uclar yoklaniyor (404 = yok, 400 = var ama istek hatali, OK = calisiyor)")
+        print()
+        adaylar = list(DAILY_MCP_PATHS) + list(MATCHING_QUANTITY_PATHS)
+        bulunanlar = []
+        for path in adaylar:
+            ad = path.rsplit("/", 1)[-1]
+            try:
+                satirlar = extract_rows(fetch(path, tgt, start, end, raw=True), path)
+                print("  OK   {:<34} {} kayit".format(ad, len(satirlar)))
+                if satirlar:
+                    print("       alanlar: " + ", ".join(satirlar[0].keys()))
+                    bulunanlar.append(path)
+            except Exception as hata:  # noqa: BLE001
+                metin = str(hata)
+                kod = re.search(r"HTTP (\d+)", metin)
+                kod = kod.group(1) if kod else "???"
+                mesaj = re.search(r'"errorMessage"\s*:\s*"([^"]+)"', metin)
+                print("  {:<4} {:<34} {}".format(kod, ad, (mesaj.group(1)[:60] if mesaj else "")))
+                if kod == "400":
+                    bulunanlar.append(path)
+        print()
+        print("VAR gibi gorunen uclar:")
+        for p in bulunanlar:
+            print("  " + p)
+        if not bulunanlar:
+            print("  (hicbiri)")
+        return 0
 
     if args.dry_run:
         # Amaç ham JSON'u kusmak değil, tek bakışta "çalışıyor mu, hangi alanlar geldi,

@@ -7,6 +7,12 @@ on:
   schedule:
     - cron: "20 4 * * *"   # her gün 04:20 UTC (07:20 TR)
   workflow_dispatch:
+    inputs:
+      kip:
+        description: "Ne yapsın?"
+        type: choice
+        default: guncelle
+        options: [guncelle, probe, dry-run]
 
 permissions:
   contents: write
@@ -31,13 +37,21 @@ jobs:
             exit 1
           fi
 
+      # Teşhis kipleri hiçbir dosya yazmaz; yalnızca EPİAŞ'ın ne döndürdüğünü rapor eder.
+      # Böylece uç adı araştırması için parolanın makineye inmesi gerekmiyor.
       - name: EPİAŞ'tan çek
         env:
           EPIAS_USERNAME: ${{ secrets.EPIAS_USERNAME }}
           EPIAS_PASSWORD: ${{ secrets.EPIAS_PASSWORD }}
-        run: python tools/epias_mirror.py --days 90 --out data/piyasa/ptf-yekdem.json
+        run: |
+          case "${{ inputs.kip || 'guncelle' }}" in
+            probe)    python tools/epias_mirror.py --days 7 --probe ;;
+            dry-run)  python tools/epias_mirror.py --days 7 --dry-run ;;
+            *)        python tools/epias_mirror.py --days 90 --out data/piyasa/ptf-yekdem.json ;;
+          esac
 
       - name: Değiştiyse yaz
+        if: ${{ (inputs.kip || 'guncelle') == 'guncelle' }}
         run: |
           if [ -n "$(git status --porcelain data/piyasa)" ]; then
             git config user.name "github-actions[bot]"
