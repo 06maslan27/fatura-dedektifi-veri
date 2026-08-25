@@ -21,6 +21,16 @@ jobs:
         with:
           python-version: "3.12"
 
+      # Secret yoksa her gün anlamsız bir yığın hata üretmesin; ne yapılacağını söylesin.
+      - name: Kimlik var mı?
+        env:
+          EPIAS_USERNAME: ${{ secrets.EPIAS_USERNAME }}
+        run: |
+          if [ -z "$EPIAS_USERNAME" ]; then
+            echo "::error title=EPİAŞ kimliği eksik::Settings → Secrets and variables → Actions altına EPIAS_USERNAME ve EPIAS_PASSWORD ekleyin. Bu iş, o iki secret girilene kadar çalışamaz."
+            exit 1
+          fi
+
       - name: EPİAŞ'tan çek
         env:
           EPIAS_USERNAME: ${{ secrets.EPIAS_USERNAME }}
