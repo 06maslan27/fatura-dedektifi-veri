@@ -55,19 +55,11 @@ YEKDEM_UNIT_COST_PATH = "/electricity-service/v1/renewables/data/unit-cost"  # Y
 # ortalamaya düşülür ve bu durum üretilen dosyanın not alanına YAZILIR — sessizce yanlış
 # yöntem kullanılmasın.
 MATCHING_QUANTITY_PATHS = (
-    "/electricity-service/v1/markets/dam/data/matching-quantity",
-    "/electricity-service/v1/markets/dam/data/matched-quantity",
+    # Doğrulandı: date, hour, matchedBids, matchedOffers döner (saatlik).
     "/electricity-service/v1/markets/dam/data/clearing-quantity",
-    "/electricity-service/v1/markets/dam/data/dam-clearing-quantity",
-    "/electricity-service/v1/markets/dam/data/dam-volume",
-    "/electricity-service/v1/markets/dam/data/trade-volume",
-    "/electricity-service/v1/markets/dam/data/trade-value",
-    "/electricity-service/v1/markets/dam/data/market-volume",
+    # Yedekler — uç adı sürümle değişirse.
+    "/electricity-service/v1/markets/dam/data/matching-quantity",
     "/electricity-service/v1/markets/dam/data/day-ahead-market-trade-volume",
-    "/electricity-service/v1/markets/dam/data/amount-of-bids",
-    "/electricity-service/v1/markets/dam/data/submitted-bid-order-volume",
-    "/electricity-service/v1/markets/dam/data/block-amount",
-    "/electricity-service/v1/markets/dam/data/supply-demand",
 )
 
 # EPİAŞ'ın DOĞRUDAN yayımladığı günlük ağırlıklı ortalama PTF.
@@ -106,6 +98,9 @@ LIST_FIELD_CANDIDATES = ("items", "body", "content", "data")
 DATE_FIELD_CANDIDATES = ("date", "effectiveDate", "period", "time", "dateTime")
 PRICE_FIELD_CANDIDATES = ("price", "mcp", "priceTl", "unitCost", "cost", "amount", "value")
 QUANTITY_FIELD_CANDIDATES = (
+    # clearing-quantity ucunun gerçek alanları. Temizlenmiş bir gün öncesi piyasasında
+    # eşleşen alış = eşleşen satış olduğu için ikisi de aynı ağırlığı verir.
+    "matchedBids", "matchedOffers",
     "matchingQuantity", "quantity", "volume", "tradeVolume", "amount", "value",
 )
 
@@ -221,18 +216,34 @@ def to_day(value) -> str | None:
     return value[:10]
 
 
-def to_hour_key(value) -> str | None:
-    """'2026-08-01T14:00:00+03:00' → '2026-08-01T14' (saatlik eşleştirme anahtarı)."""
-    if not isinstance(value, str) or len(value) < 13:
+def to_hour_key(row: dict) -> str | None:
+    """
+    Bir satırdan saatlik eşleştirme anahtarı üretir: '2026-08-01T14'.
+
+    EPİAŞ hem PTF hem eşleşme miktarı uçlarında tarihi ve saati AYRI alanlarda veriyor
+    (`date` = günün başlangıcı, `hour` = "14:00"). Yalnızca `date`'e bakmak günün 24
+    saatini tek anahtara toplar ve ağırlıklandırmayı bozar; bu yüzden ikisi birleştiriliyor.
+    Saat alanı yoksa tarihin kendi saat kısmına düşülür.
+    """
+    ham = pick(row, DATE_FIELD_CANDIDATES)
+    if not isinstance(ham, str) or len(ham) < 10:
         return None
-    return value[:13]
+    gun = ham[:10]
+
+    saat = row.get("hour")
+    if saat is not None:
+        metin = str(saat).strip()
+        rakam = re.match(r"^(\d{1,2})", metin)
+        if rakam:
+            return "{}T{:02d}".format(gun, int(rakam.group(1)))
+    return ham[:13] if len(ham) >= 13 else None
 
 
 def hourly_quantities(rows: list[dict]) -> dict[str, Decimal]:
     """Saat anahtarı → o saatte eşleşen miktar."""
     sonuc: dict[str, Decimal] = {}
     for row in rows:
-        saat = to_hour_key(pick(row, DATE_FIELD_CANDIDATES))
+        saat = to_hour_key(row)
         miktar = pick(row, QUANTITY_FIELD_CANDIDATES)
         if saat is None or miktar is None:
             continue
@@ -258,8 +269,7 @@ def daily_weighted_average(
     paydalar: dict[str, Decimal] = {}
 
     for row in rows:
-        ham_tarih = pick(row, DATE_FIELD_CANDIDATES)
-        gun = to_day(ham_tarih)
+        gun = to_day(pick(row, DATE_FIELD_CANDIDATES))
         fiyat = pick(row, PRICE_FIELD_CANDIDATES)
         if gun is None or fiyat is None:
             continue
@@ -270,7 +280,7 @@ def daily_weighted_average(
 
         agirlik = Decimal(1)
         if agirlikli:
-            saat = to_hour_key(ham_tarih)
+            saat = to_hour_key(row)
             agirlik = quantities.get(saat, Decimal(0)) if saat else Decimal(0)
             # O saatin miktarı yoksa saati düşürmek yerine ağırlığı 1 saymak, günün
             # tamamını kaybetmekten iyidir; ama bu artık saf ağırlıklı ortalama değil.

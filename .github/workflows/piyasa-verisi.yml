@@ -45,8 +45,8 @@ jobs:
           EPIAS_PASSWORD: ${{ secrets.EPIAS_PASSWORD }}
         run: |
           case "${{ inputs.kip || 'guncelle' }}" in
-            probe)    python tools/epias_mirror.py --days 7 --probe ;;
-            dry-run)  python tools/epias_mirror.py --days 7 --dry-run ;;
+            probe)    python tools/epias_mirror.py --days 45 --probe ;;
+            dry-run)  python tools/epias_mirror.py --days 95 --dry-run ;;
             *)        python tools/epias_mirror.py --days 90 --out data/piyasa/ptf-yekdem.json ;;
           esac
 
