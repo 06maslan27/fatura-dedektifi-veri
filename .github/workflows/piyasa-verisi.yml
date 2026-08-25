@@ -62,3 +62,12 @@ jobs:
           else
             echo "Değişiklik yok."
           fi
+
+      # jsDelivr, @main adreslerini 12 saate kadar önbellekte tutuyor. Bu adım olmadan
+      # dosya güncellense bile uygulamaya yarım gün eski kopya iniyor. Purge API'si tam
+      # bu iş için var; kimlik istemiyor.
+      - name: CDN önbelleğini temizle
+        if: ${{ (inputs.kip || 'guncelle') == 'guncelle' }}
+        run: |
+          curl -sS "https://purge.jsdelivr.net/gh/06maslan27/fatura-dedektifi-veri@main/data/piyasa/ptf-yekdem.json"
+          echo
