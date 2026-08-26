@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "title": "EPİAŞ piyasa verisi",
-  "generatedAt": "2026-08-26T05:00:32+00:00",
+  "generatedAt": "2026-08-26T18:10:59+00:00",
   "disclaimer": "Bu dosya EPİAŞ Şeffaflık Platformu'ndan otomatik çekilen kamuya açık piyasa verisidir. Uygulama yalnızca bu dosyayı indirir; EPİAŞ'a kullanıcı verisi gönderilmez.",
   "priceSeries": [
     {
@@ -9,10 +9,6 @@
       "name": "PTF (günlük ağırlıklı ortalama)",
       "unit": "TL/kWh",
       "points": [
-        {
-          "date": "2026-05-28",
-          "price": "0.158124"
-        },
         {
           "date": "2026-05-29",
           "price": "0.083409"
@@ -372,6 +368,10 @@
         {
           "date": "2026-08-26",
           "price": "3.675216"
+        },
+        {
+          "date": "2026-08-27",
+          "price": "3.497473"
         }
       ],
       "source": "EPİAŞ Şeffaflık Platformu · gün öncesi piyasası takas fiyatı (MCP)",
@@ -380,6 +380,48 @@
     }
   ],
   "yekdemUnitCosts": [
+    {
+      "year": 2026,
+      "month": 7,
+      "unitCostPerMwh": "423.99",
+      "actual": false,
+      "source": "EPDK Kurul Kararı 14718 / 02.07.2026 — 2026 öngörülen YEKDEM maliyeti (revize)"
+    },
+    {
+      "year": 2026,
+      "month": 8,
+      "unitCostPerMwh": "450.45",
+      "actual": false,
+      "source": "EPDK Kurul Kararı 14718 / 02.07.2026 — 2026 öngörülen YEKDEM maliyeti (revize)"
+    },
+    {
+      "year": 2026,
+      "month": 9,
+      "unitCostPerMwh": "581.14",
+      "actual": false,
+      "source": "EPDK Kurul Kararı 14718 / 02.07.2026 — 2026 öngörülen YEKDEM maliyeti (revize)"
+    },
+    {
+      "year": 2026,
+      "month": 10,
+      "unitCostPerMwh": "526.39",
+      "actual": false,
+      "source": "EPDK Kurul Kararı 14718 / 02.07.2026 — 2026 öngörülen YEKDEM maliyeti (revize)"
+    },
+    {
+      "year": 2026,
+      "month": 11,
+      "unitCostPerMwh": "488.86",
+      "actual": false,
+      "source": "EPDK Kurul Kararı 14718 / 02.07.2026 — 2026 öngörülen YEKDEM maliyeti (revize)"
+    },
+    {
+      "year": 2026,
+      "month": 12,
+      "unitCostPerMwh": "393.75",
+      "actual": false,
+      "source": "EPDK Kurul Kararı 14718 / 02.07.2026 — 2026 öngörülen YEKDEM maliyeti (revize)"
+    },
     {
       "year": 2026,
       "month": 5,
