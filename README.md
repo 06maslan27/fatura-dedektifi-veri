@@ -23,6 +23,34 @@ dosya dağıtımı için tasarlanmadığından kullanıcı sayısı büyüdüğ�
 tam olarak bu iş için var. Uygulama günde bir kez ve ETag ile şartlı indirir; dosya
 değişmediyse 304 döner ve hiç veri inmez.
 
+## Yeni YEKDEM öngörüsü ekleme
+
+Kurul yılda bir (bazen yıl ortasında revize ederek) aylık YEKDEM öngörülerini yayımlıyor.
+Fatura hesabına giren değer budur — EPİAŞ'ın gerçekleşen bedeli değil (Tebliğ md. 6/6).
+
+**Uygulamayı güncellemeye gerek yok.** Şunu yap:
+
+1. [`data/yekdem-ongoru.csv`](data/yekdem-ongoru.csv) dosyasını aç
+2. Sağ üstteki **kalem simgesine** bas
+3. En alta satırları yaz:
+
+```
+2027,1,415.20,EPDK Kurul Kararı 15xxx / 12.2026
+2027,2,398.60,
+2027,3,372.40,
+```
+
+4. **Commit changes** de
+
+Kaynağı bir kez yazman yeterli; boş bırakılan satırlar üstteki kaynağı devralır. Kurul
+yıl ortasında revize ederse eski satırı silme, yenisini alta yaz — sonraki geçerli olur.
+
+Telefondan da yapılabilir. Birkaç dakika içinde bütün kullanıcılara iner; uygulama zaten
+her gün bu dosyayı indiriyor.
+
+**Bir şeyi yanlış yazarsan ne olur:** iş kırmızı yanar, hangi satırın nesi bozuk yazar ve
+**yayındaki dosya değişmez**. Yarım veri kimseye gitmez.
+
 ## Kurulum (tek seferlik)
 
 1. `Settings → Secrets and variables → Actions` altına ekle:

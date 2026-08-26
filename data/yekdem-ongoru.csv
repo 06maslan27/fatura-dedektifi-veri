@@ -1,0 +1,25 @@
+# KURUL'UN ÖNGÖRDÜĞÜ AYLIK YEKDEM BİRİM MALİYETİ (TL/MWh)
+#
+# Fatura hesabına giren değer budur — EPİAŞ'ın gerçekleşen bedeli değil.
+# Tebliğ md. 6/6 eşitlik (2) formülün değişkenini "Kurul tarafından öngörülen tahmini
+# YEKDEM birim bedeli" olarak tanımlar; öngörü/gerçekleşen farkı md. 6/7 uyarınca
+# tedarikçinin kendi tarife düzenlemesinde mahsuplaşır, faturaya yansımaz.
+#
+# NASIL EKLENİR
+#   1. Bu dosyayı GitHub'da aç, sağ üstteki kalem simgesine bas.
+#   2. En alta yeni satırları yaz: yil,ay,tl_mwh,kaynak
+#   3. "Commit changes" de. Gerisi otomatik — birkaç dakika içinde yayında.
+#
+#   Kaynağı bir kez yazman yeterli; boş bırakılan satırlar üstteki kaynağı devralır.
+#   Aynı ay ikinci kez yazılırsa (Kurul revize ederse) SONRAKİ satır geçerli olur.
+#
+# Bozuk bir satır olursa iş kırmızı yanar ve YAYINDAKİ DOSYA DEĞİŞMEZ —
+# yarım veri kimseye gitmez.
+
+yil,ay,tl_mwh,kaynak
+2026,7,423.99,EPDK Kurul Kararı 14718 / 02.07.2026 — 2026 öngörülen YEKDEM maliyeti (revize)
+2026,8,450.45,
+2026,9,581.14,
+2026,10,526.39,
+2026,11,488.86,
+2026,12,393.75,

@@ -421,10 +421,82 @@ def gunluk_ptf_bul(tgt: str, start: date, end: date) -> tuple:
     return gunluk, ("agirlikli" if agirlikli else "duz"), ""
 
 
+class OngoruHatasi(RuntimeError):
+    """CSV bozuk. Yayındaki dosyaya dokunmadan işi durdurmak için."""
+
+
+def ongorulen_yekdem_oku(yol: str) -> list[dict]:
+    """
+    Kurul'un öngördüğü aylık YEKDEM bedellerini CSV'den okur.
+
+    Biçim bilerek CSV: JSON'da bir virgül ya da tırnak unutmak dosyanın tamamını
+    bozuyor, CSV'de en fazla bir satır bozulur ve hangi satır olduğu söylenebilir.
+
+        yil,ay,tl_mwh,kaynak
+        2027,1,415.20,EPDK Kurul Kararı 15xxx / 12.2026
+        2027,2,398.60,
+
+    Kaynak boş bırakılırsa üstteki satırdan devralınır — bir kez yazmak yeterli.
+    Aynı (yıl, ay) ikinci kez yazılırsa SONRAKİ kazanır; Kurul yıl ortasında revize
+    ettiğinde eski satırı silmeye gerek kalmasın diye.
+
+    Bozuk satırda [OngoruHatasi] fırlatır; çağıran hiçbir dosya yazmadan durur.
+    """
+    if not os.path.exists(yol):
+        return []
+
+    kayitlar: dict[tuple[int, int], dict] = {}
+    son_kaynak = ""
+    with open(yol, encoding="utf-8") as dosya:
+        for satir_no, ham in enumerate(dosya, start=1):
+            satir = ham.strip()
+            if not satir or satir.startswith("#"):
+                continue
+            parcalar = [p.strip() for p in satir.split(",", 3)]
+            if parcalar[0].lower() in ("yil", "yıl"):      # başlık satırı
+                continue
+            if len(parcalar) < 3:
+                raise OngoruHatasi(
+                    f"{yol}:{satir_no} — en az 3 sütun gerekli (yil,ay,tl_mwh): {satir!r}"
+                )
+
+            try:
+                yil = int(parcalar[0])
+                ay = int(parcalar[1])
+                bedel = Decimal(parcalar[2].replace(",", "."))
+            except Exception as hata:  # noqa: BLE001
+                raise OngoruHatasi(f"{yol}:{satir_no} — sayı okunamadı: {satir!r}") from hata
+
+            if not 1 <= ay <= 12:
+                raise OngoruHatasi(f"{yol}:{satir_no} — ay 1–12 arasında olmalı, {ay} yazılmış.")
+            if bedel <= 0:
+                raise OngoruHatasi(f"{yol}:{satir_no} — bedel pozitif olmalı, {bedel} yazılmış.")
+            if not 2000 <= yil <= 2100:
+                raise OngoruHatasi(f"{yol}:{satir_no} — yıl makul değil: {yil}")
+
+            kaynak = (parcalar[3].strip() if len(parcalar) > 3 else "") or son_kaynak
+            if not kaynak:
+                raise OngoruHatasi(
+                    f"{yol}:{satir_no} — kaynak yazılmamış ve devralınacak üst satır yok."
+                )
+            son_kaynak = kaynak
+
+            kayitlar[(yil, ay)] = {
+                "year": yil,
+                "month": ay,
+                "unitCostPerMwh": f"{bedel}",
+                "actual": False,
+                "source": kaynak,
+            }
+
+    return [kayitlar[k] for k in sorted(kayitlar)]
+
+
 def build_catalog(
     mcp_points: list[dict],
     yekdem_months: list[dict],
     generated_at: str,
+    yekdem_forecast: list[dict] | None = None,
     method: str = "duz",
     method_detail: str = "",
 ) -> dict:
@@ -454,7 +526,8 @@ def build_catalog(
         "piyasa verisidir. Uygulama yalnızca bu dosyayı indirir; EPİAŞ'a kullanıcı verisi "
         "gönderilmez.",
         "priceSeries": series,
-        "yekdemUnitCosts": yekdem_months,
+        # Önce Kurul öngörüleri (faturaya giren), sonra EPİAŞ gerçekleşenleri (bilgi).
+        "yekdemUnitCosts": (yekdem_forecast or []) + yekdem_months,
     }
 
 
@@ -462,6 +535,11 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="EPİAŞ PTF/YEKDEM aynası")
     parser.add_argument("--days", type=int, default=60, help="Kaç günlük geçmiş çekilsin")
     parser.add_argument("--out", default="data/piyasa/ptf-yekdem.json")
+    parser.add_argument(
+        "--ongoru",
+        default="data/yekdem-ongoru.csv",
+        help="Kurul'un öngördüğü aylık YEKDEM bedellerini içeren CSV.",
+    )
     parser.add_argument(
         "--probe",
         action="store_true",
@@ -671,6 +749,16 @@ def main() -> int:
                            if tamam else "eksik var - yukaridaki uyarilara bak."))
         return 0 if tamam else 1
 
+    # Öngörü CSV'si EN BAŞTA okunuyor: bozuksa EPİAŞ'a hiç gitmeden duruyoruz ve
+    # yayındaki dosya olduğu gibi kalıyor. Yarım veri kimseye inmesin.
+    try:
+        ongoruler = ongorulen_yekdem_oku(args.ongoru)
+    except OngoruHatasi as hata:
+        print("ÖNGÖRÜ DOSYASI BOZUK — hiçbir şey yazılmadı.", file=sys.stderr)
+        print("  " + str(hata), file=sys.stderr)
+        return 4
+    print(f"Kurul öngörüsü: {len(ongoruler)} ay ({args.ongoru})")
+
     yekdem_rows = fetch(YEKDEM_UNIT_COST_PATH, tgt, start, end)
 
     # Günlük PTF: önce EPİAŞ'ın yayımladığı ağırlıklı ortalama, olmazsa türetme.
@@ -699,6 +787,7 @@ def main() -> int:
         mcp_points,
         yekdem_months,
         datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        yekdem_forecast=ongoruler,
         method=yontem,
         method_detail=yontem_detay,
     )
@@ -711,7 +800,7 @@ def main() -> int:
 
     print(
         f"Yazıldı: {out_path} · PTF {len(mcp_points)} gün ({yontem}) "
-        f"· YEKDEM {len(yekdem_months)} ay"
+        f"· YEKDEM öngörü {len(ongoruler)} ay + gerçekleşen {len(yekdem_months)} ay"
     )
     return 0
 
