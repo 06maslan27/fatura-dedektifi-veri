@@ -13,6 +13,8 @@
 #   Kaynağı bir kez yazman yeterli; boş bırakılan satırlar üstteki kaynağı devralır.
 #   Aynı ay ikinci kez yazılırsa (Kurul revize ederse) SONRAKİ satır geçerli olur.
 #
+# Kurul kararını girer girmez ayna çalışır; ertesi sabahı beklemene gerek yok.
+#
 # Bozuk bir satır olursa iş kırmızı yanar ve YAYINDAKİ DOSYA DEĞİŞMEZ —
 # yarım veri kimseye gitmez.
 
