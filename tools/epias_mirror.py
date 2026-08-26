@@ -27,6 +27,7 @@ import json
 import os
 import re
 import sys
+import time
 import urllib.error
 import getpass
 import urllib.parse
@@ -109,6 +110,29 @@ class EpiasError(RuntimeError):
     pass
 
 
+def yeniden_dene(islem, ad: str, deneme: int = 3, bekleme: int = 20):
+    """
+    Geçici ağ hatasında yeniden dener.
+
+    EPİAŞ uçları zaman zaman zaman aşımına düşüyor. Günde bir çalışan bir işi tek bir
+    takılmanın düşürmesi anlamsız; ama KALICI hata (yanlış parola, 404) hemen yukarı
+    çıkmalı — o yüzden yalnızca ağ/zaman aşımı hataları tekrarlanıyor.
+    """
+    for sira in range(1, deneme + 1):
+        try:
+            return islem()
+        except (urllib.error.URLError, TimeoutError, OSError) as hata:
+            if isinstance(hata, urllib.error.HTTPError):
+                raise
+            if sira == deneme:
+                raise
+            print(
+                f"{ad}: ağ hatası ({hata}), {bekleme} sn sonra {sira + 1}. deneme...",
+                file=sys.stderr,
+            )
+            time.sleep(bekleme)
+
+
 def login(username: str, password: str) -> str:
     """CAS'tan TGT alır. Ticket yanıt gövdesinde ya da Location başlığında gelir."""
     body = urllib.parse.urlencode({"username": username, "password": password}).encode()
@@ -171,8 +195,10 @@ def fetch(
         method="POST",
     )
     try:
-        with urllib.request.urlopen(request, timeout=120) as response:
-            document = json.loads(response.read().decode("utf-8"))
+        def istek():
+            with urllib.request.urlopen(request, timeout=120) as response:
+                return json.loads(response.read().decode("utf-8"))
+        document = yeniden_dene(istek, path.rsplit("/", 1)[-1], deneme=2, bekleme=10)
     except urllib.error.HTTPError as exc:
         detail = exc.read().decode("utf-8", errors="replace")[:400]
         # Yayımlanmamış gün istendiyse aralığı bir gün kısaltıp bir kez daha dene.
@@ -578,11 +604,21 @@ def main() -> int:
             print("Kullanici adi ve parola bos olamaz.", file=sys.stderr)
             return 2
 
+    # Öngörü CSV'si EN BAŞTA okunuyor: bozuksa EPİAŞ'a hiç gitmeden duruyoruz ve
+    # yayındaki dosya olduğu gibi kalıyor. Yarım veri kimseye inmesin.
+    try:
+        ongoruler = ongorulen_yekdem_oku(args.ongoru)
+    except OngoruHatasi as hata:
+        print("ÖNGÖRÜ DOSYASI BOZUK — hiçbir şey yazılmadı.", file=sys.stderr)
+        print("  " + str(hata), file=sys.stderr)
+        return 4
+    print(f"Kurul öngörüsü: {len(ongoruler)} ay ({args.ongoru})")
+
     end = son_yayim_gunu()
     start = end - timedelta(days=args.days)
 
     try:
-        tgt = login(username, password)
+        tgt = yeniden_dene(lambda: login(username, password), "EPİAŞ girişi")
     except EpiasError as hata:
         print()
         print("GIRIS BASARISIZ: " + str(hata), file=sys.stderr)
@@ -748,16 +784,6 @@ def main() -> int:
         print("SONUC: " + ("her sey yerinde, ayna calismaya hazir."
                            if tamam else "eksik var - yukaridaki uyarilara bak."))
         return 0 if tamam else 1
-
-    # Öngörü CSV'si EN BAŞTA okunuyor: bozuksa EPİAŞ'a hiç gitmeden duruyoruz ve
-    # yayındaki dosya olduğu gibi kalıyor. Yarım veri kimseye inmesin.
-    try:
-        ongoruler = ongorulen_yekdem_oku(args.ongoru)
-    except OngoruHatasi as hata:
-        print("ÖNGÖRÜ DOSYASI BOZUK — hiçbir şey yazılmadı.", file=sys.stderr)
-        print("  " + str(hata), file=sys.stderr)
-        return 4
-    print(f"Kurul öngörüsü: {len(ongoruler)} ay ({args.ongoru})")
 
     yekdem_rows = fetch(YEKDEM_UNIT_COST_PATH, tgt, start, end)
 
