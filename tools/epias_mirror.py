@@ -316,8 +316,13 @@ def monthly_yekdem(values: dict[str, Decimal]) -> list[dict]:
     düşüyorsa o ayın bedeli o ağırlıkla girer. Bu yüzden ayna da ay bazında yazar; günlük
     bir seri olarak yazmak, motorun ağırlıklandırmasını bozardı.
 
-    EPİAŞ'ın açıkladığı bu değerler KESİNLEŞMİŞ GERÇEKLEŞEN bedeldir; 1 Nolu Açıklama
-    md. 13 uyarınca Kurul'un öngördüğü tahmini bedeli ezer. Bu yüzden actual=true.
+    EPİAŞ'ın açıkladığı bu değerler KESİNLEŞMİŞ GERÇEKLEŞEN bedeldir (actual=true).
+
+    DİKKAT: fatura hesabına giren bu değil, Kurul'un ÖNGÖRDÜĞÜ bedeldir — Tebliğ md. 6/6
+    eşitlik (2)'nin değişkeni öngörüdür ve md. 6/7 uyarınca öngörü/gerçekleşen farkı
+    tedarikçinin kendi tarife düzenlemesinde mahsuplaşır, tüketicinin faturasına yansımaz.
+    Buradaki değerler uygulamada bilgi olarak tutulur ve yalnızca ilgili ayın Kurul
+    öngörüsü hiç yoksa yedek olarak devreye girer.
     """
     buckets: dict[tuple[int, int], list[Decimal]] = {}
     for day, value in values.items():
