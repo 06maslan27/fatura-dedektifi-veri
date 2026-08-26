@@ -4,6 +4,13 @@ name: Piyasa verisi
 # depo public olduğu için fork'tan gelen bir PR iş akışını çalıştırıp secret'lara
 # uzanamamalı.
 on:
+  # Öngörü dosyası düzenlenir düzenlenmez çalışsın — Kurul kararını girip ertesi sabahı
+  # beklemek anlamsız. Yol BİLEREK dar: iş kendi çıktısını (data/piyasa/) commit'liyor,
+  # onu da tetikleseydik sonsuz döngü olurdu.
+  push:
+    paths:
+      - "data/yekdem-ongoru.csv"
+      - "tools/epias_mirror.py"
   schedule:
     - cron: "20 4 * * *"   # her gün 04:20 UTC (07:20 TR)
   workflow_dispatch:
