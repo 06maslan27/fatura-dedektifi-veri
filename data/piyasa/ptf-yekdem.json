@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "title": "EPİAŞ piyasa verisi",
-  "generatedAt": "2026-09-02T08:51:32+00:00",
+  "generatedAt": "2026-09-03T09:00:24+00:00",
   "disclaimer": "Bu dosya EPİAŞ Şeffaflık Platformu'ndan otomatik çekilen kamuya açık piyasa verisidir. Uygulama yalnızca bu dosyayı indirir; EPİAŞ'a kullanıcı verisi gönderilmez.",
   "priceSeries": [
     {
@@ -9,10 +9,6 @@
       "name": "PTF (günlük ağırlıklı ortalama)",
       "unit": "TL/kWh",
       "points": [
-        {
-          "date": "2026-06-04",
-          "price": "1.321349"
-        },
         {
           "date": "2026-06-05",
           "price": "1.767443"
@@ -372,6 +368,10 @@
         {
           "date": "2026-09-02",
           "price": "3.342369"
+        },
+        {
+          "date": "2026-09-03",
+          "price": "2.929847"
         }
       ],
       "source": "EPİAŞ Şeffaflık Platformu · gün öncesi piyasası takas fiyatı (MCP)",
