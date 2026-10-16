@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "title": "EPİAŞ piyasa verisi",
-  "generatedAt": "2026-10-15T09:14:01+00:00",
+  "generatedAt": "2026-10-16T09:06:45+00:00",
   "disclaimer": "Bu dosya EPİAŞ Şeffaflık Platformu'ndan otomatik çekilen kamuya açık piyasa verisidir. Uygulama yalnızca bu dosyayı indirir; EPİAŞ'a kullanıcı verisi gönderilmez.",
   "priceSeries": [
     {
@@ -9,10 +9,6 @@
       "name": "PTF (günlük ağırlıklı ortalama)",
       "unit": "TL/kWh",
       "points": [
-        {
-          "date": "2026-07-17",
-          "price": "2.806122"
-        },
         {
           "date": "2026-07-18",
           "price": "2.678749"
@@ -372,6 +368,10 @@
         {
           "date": "2026-10-15",
           "price": "2.931674"
+        },
+        {
+          "date": "2026-10-16",
+          "price": "3.055408"
         }
       ],
       "source": "EPİAŞ Şeffaflık Platformu · gün öncesi piyasası takas fiyatı (MCP)",
@@ -425,14 +425,21 @@
     {
       "year": 2026,
       "month": 7,
-      "unitCostPerMwh": "490.13",
+      "unitCostPerMwh": "490.44",
       "actual": true,
       "source": "EPİAŞ Şeffaflık Platformu · YEKDEM birim maliyeti (gerçekleşen)"
     },
     {
       "year": 2026,
       "month": 8,
-      "unitCostPerMwh": "395.30",
+      "unitCostPerMwh": "397.27",
+      "actual": true,
+      "source": "EPİAŞ Şeffaflık Platformu · YEKDEM birim maliyeti (gerçekleşen)"
+    },
+    {
+      "year": 2026,
+      "month": 9,
+      "unitCostPerMwh": "444.99",
       "actual": true,
       "source": "EPİAŞ Şeffaflık Platformu · YEKDEM birim maliyeti (gerçekleşen)"
     }
